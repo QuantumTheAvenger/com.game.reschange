@@ -20,6 +20,7 @@ import java.util.Locale
 import androidx.core.content.edit
 import androidx.appcompat.widget.SearchView
 import androidx.core.view.WindowCompat
+import java.io.File
 
 class MainActivity : AppCompatActivity() {
 
@@ -52,13 +53,32 @@ class MainActivity : AppCompatActivity() {
         }
 
         findViewById<Button>(R.id.resetButton).setOnClickListener {
+            // DE Alanını sıfırla
+            val deContext = createDeviceProtectedStorageContext()
+            deContext.getSharedPreferences("scale_prefs", Context.MODE_PRIVATE).edit { clear() }
+            
             val packages = ScalePrefs.getAllPackages(this)
             for (packageName in packages) {
                 runAsRoot("am force-stop $packageName")
             }
-            getSharedPreferences("scale_prefs", Context.MODE_PRIVATE).edit { clear() }
             adapter.notifyDataSetChanged()
-            Toast.makeText(this, "Tüm ayarlar sıfırlandı.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Tüm ayarlar DE alanından sıfırlandı.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Ayarları DE (Device Encrypted) alanına kaydeden yeni yardımcı fonksiyon
+    private fun saveToDeStorage(packageName: String, scale: Float) {
+        val deContext = createDeviceProtectedStorageContext()
+        val prefs = deContext.getSharedPreferences("scale_prefs", Context.MODE_PRIVATE)
+        prefs.edit(commit = true) {
+            putFloat(packageName, scale)
+        }
+        
+        // Android 11 Dosya İzni Fix: Klasörü ve dosyayı herkesin (LSPosed) okuyabileceği hale getir
+        val prefFile = File(deContext.dataDir, "shared_prefs/scale_prefs.xml")
+        if (prefFile.exists()) {
+            prefFile.setReadable(true, false)
+            runAsRoot("chmod 777 ${prefFile.absolutePath}")
         }
     }
 
@@ -80,7 +100,10 @@ class MainActivity : AppCompatActivity() {
     private fun filterAppList() {
         var tempList = allApps
         if (showOnlyModified) {
-            tempList = tempList.filter { app -> ScalePrefs.getScale(this, app.packageName) != 1.0f }
+            tempList = tempList.filter { app -> 
+                val deContext = createDeviceProtectedStorageContext()
+                deContext.getSharedPreferences("scale_prefs", Context.MODE_PRIVATE).getFloat(app.packageName, 1.0f) != 1.0f 
+            }
         }
         if (currentQuery.isNotEmpty()) {
             val lowerQ = currentQuery.lowercase(Locale.getDefault())
@@ -104,7 +127,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showResolutionDialog(packageName: String) {
-        val savedScale = ScalePrefs.getScale(this, packageName)
+        val deContext = createDeviceProtectedStorageContext()
+        val savedScale = deContext.getSharedPreferences("scale_prefs", Context.MODE_PRIVATE).getFloat(packageName, 1.0f)
+        
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(50, 40, 50, 10)
@@ -125,20 +150,19 @@ class MainActivity : AppCompatActivity() {
         layout.addView(slider)
 
         MaterialAlertDialogBuilder(this, R.style.MyRoundedDialog)
-            .setTitle("Çözünürlük Ayarı")
+            .setTitle("Çözünürlük Ayarı (DE Mode)")
             .setView(layout)
             .setPositiveButton("Uygula") { _, _ ->
                 val scale = String.format(Locale.US, "%.2f", slider.value).toFloat()
-                ScalePrefs.saveScale(this, packageName, scale)
+                saveToDeStorage(packageName, scale)
                 adapter.notifyDataSetChanged()
                 
-                // Sadece uygulamayı durduruyoruz, kanca açılışta çalışacak
                 runAsRoot("am force-stop $packageName")
-                Toast.makeText(this, "Ayarlar kaydedildi. Uygulayı açın.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "DE Alanına Kaydedildi. Kanca Hazır.", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("İptal", null)
             .setNeutralButton("Sıfırla") { _, _ ->
-                ScalePrefs.saveScale(this, packageName, 1.0f)
+                saveToDeStorage(packageName, 1.0f)
                 runAsRoot("am force-stop $packageName")
                 adapter.notifyDataSetChanged()
                 Toast.makeText(this, "Varsayılana dönüldü.", Toast.LENGTH_SHORT).show()
