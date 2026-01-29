@@ -8,12 +8,12 @@ plugins {
 
 android {
     namespace = "com.game.reschange"
-    compileSdk = 35
+    compileSdk = 30
 
     defaultConfig {
         applicationId = "com.game.reschange"
-        minSdk = 31
-        targetSdk = 35
+        minSdk = 26
+        targetSdk = 30
         versionCode = 6
         versionName = "1.5"
 
