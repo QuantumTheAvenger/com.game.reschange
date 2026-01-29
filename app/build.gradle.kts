@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "com.game.reschange"
-    compileSdk = 30
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.game.reschange"
