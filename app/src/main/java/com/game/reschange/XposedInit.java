@@ -13,14 +13,14 @@ public class XposedInit implements IXposedHookLoadPackage {
 
     @Override
     public void handleLoadPackage(final LoadPackageParam lpparam) throws Throwable {
-        // Sistem uygulamalarını geç
-        if (lpparam.packageName.equals("android") || lpparam.packageName.equals("com.android.systemui")) return;
+        // Sistem uygulamalarını ve modülün kendisini geç
+        if (lpparam.packageName.equals("android") || 
+            lpparam.packageName.equals("com.android.systemui") ||
+            lpparam.packageName.equals("com.game.reschange")) return;
 
-        // AYARLARI OKUMA (ANDROID 11 FIX)
+        // 🛡️ AYARLARI OKUMA: Dosyayı hem CE hem DE alanında arar
         final XSharedPreferences prefs = new XSharedPreferences("com.game.reschange", "scale_prefs");
-        prefs.makeWorldReadable(); // Bu satır önemli
         
-        // Kancayı atıyoruz
         XposedHelpers.findAndHookMethod(
                 "android.view.ViewRootImpl",
                 lpparam.classLoader,
@@ -31,7 +31,7 @@ public class XposedInit implements IXposedHookLoadPackage {
                 new XC_MethodHook() {
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        // Her seferinde güncel ayarı çekmek için reload yapıyoruz
+                        // Dosyayı her seferinde yeniden oku
                         prefs.reload();
                         float scale = prefs.getFloat(lpparam.packageName, 1.0f);
 
@@ -39,10 +39,13 @@ public class XposedInit implements IXposedHookLoadPackage {
                             WindowManager.LayoutParams lp = (WindowManager.LayoutParams) param.args[1];
                             if (lp.width > 0) lp.width = (int) (lp.width * scale);
                             if (lp.height > 0) lp.height = (int) (lp.height * scale);
-                            XposedBridge.log("GameResChange: " + lpparam.packageName + " için ölçek uygulandı: " + scale);
+                            
+                            // Log basıyoruz ki LSPosed Logunda çalıştığını görelim
+                            XposedBridge.log("GameResChange Uygulandı: " + lpparam.packageName + " Scale: " + scale);
                         }
                     }
                 }
         );
     }
-}
+    }
+        
